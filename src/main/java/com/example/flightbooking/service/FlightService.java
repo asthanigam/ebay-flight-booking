@@ -17,9 +17,6 @@ public class FlightService {
     }
 
     public Flight createFlight(CreateFlightRequest request) {
-        if (flightRepository.existsByFlightNumber(request.flightNumber())) {
-            throw new DuplicateFlightException(request.flightNumber());
-        }
         Flight flight = new Flight(
                 request.flightNumber(),
                 request.origin(),
@@ -27,7 +24,10 @@ public class FlightService {
                 request.departureTime(),
                 request.totalSeats()
         );
-        return flightRepository.save(flight);
+        if (flightRepository.putIfAbsent(flight).isPresent()) {
+            throw new DuplicateFlightException(request.flightNumber());
+        }
+        return flight;
     }
 
     public Flight getFlight(String flightNumber) {

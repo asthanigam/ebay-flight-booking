@@ -11,7 +11,7 @@ public class BookingRepository {
     private final ConcurrentHashMap<String, Booking> bookingsById = new ConcurrentHashMap<>();
 
     public Booking save(Booking booking) {
-        bookingsById.put(booking.getBookingId(), booking);
+        bookingsById.put(booking.bookingId(), booking);
         return booking;
     }
 }

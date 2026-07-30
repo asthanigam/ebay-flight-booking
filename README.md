@@ -126,11 +126,52 @@ The spec deliberately left business rules open. The calls made here:
 
 Step 1 (scaffold through tests, README) was produced entirely through an AI coding
 agent - every commit message contains the literal prompt that drove it. Step 2 is a
-single final commit where the same agent did a self-review pass and tightened a few
-things up; that commit message spells out exactly what changed and why. Because both
-steps were AI-performed, Step 2 doesn't literally satisfy "manual coding" in the
-letter of the exercise, but it aims to satisfy it in spirit: a deliberate second pass
-looking for real issues rather than more feature generation.
+single final commit where the same agent did a review pass - covering both a first
+round of fixes (the flight-creation race condition, removing redundant
+`@ResponseStatus` annotations, adding a catch-all exception handler) and a follow-up
+specifically auditing SOLID adherence and concurrency correctness (closing a minor
+error-message race, splitting seed-only vs. API-driven repository writes) - and that
+commit message spells out exactly what changed and why. Because both steps were
+AI-performed, Step 2 doesn't literally satisfy "manual coding" in the letter of the
+exercise, but it aims to satisfy it in spirit: a deliberate review pass looking for
+real issues rather than more feature generation.
+
+## SOLID & concurrency audit
+
+A follow-up review pass, specifically checking design principles and concurrency
+correctness:
+
+- **SRP**: each class has one job - `Flight` owns its own seat-count invariant
+  (`reserveSeats`), the two `*Service` classes each own one use case, controllers are
+  thin adapters, `GlobalExceptionHandler` owns status-code mapping. No God classes.
+- **DIP in practice**: every collaborator is constructor-injected (`FlightService`
+  receives `FlightRepository`, `BookingService` receives `FlightService` +
+  `BookingRepository`, controllers receive services) - nothing does `new` on its own
+  dependencies, which is the actual substance of DIP. What's **not** here: Java
+  `interface`s in front of the repositories/services. That's a deliberate call, not an
+  oversight - there's exactly one implementation of each, no swappable backend to
+  target, and adding an interface with a single implementer would be ceremony with no
+  present benefit (classic YAGNI). If a real datastore replaced the in-memory maps,
+  that's when the interface would earn its keep.
+- **ISP/OCP**: not much surface area to violate at this size; adding a new error type
+  only means adding one `@ExceptionHandler` method, nothing else changes.
+- **Concurrency, re-verified**: exactly two places mutate shared state -
+  `Flight.reserveSeats` (booking) and `FlightRepository.putIfAbsent` (flight creation).
+  Both are single-lock-per-operation with no nesting, so there's no lock-ordering /
+  deadlock risk. `availableSeats` is a plain (non-volatile) `int`, which is safe here
+  only because every read and write of it goes through a `synchronized` method on the
+  same monitor - the JMM guarantees visibility across synchronized boundaries, so no
+  extra `volatile`/`Atomic*` is needed on top.
+- **Fixed in this pass**: `Flight.reserveSeats` used to return a plain `boolean`, and
+  `BookingService` would call the separate, unsynchronized `getAvailableSeats()`
+  afterward to build the 409 message - a harmless-but-sloppy gap where, under load,
+  the reported "available" count could reflect a different moment than the actual
+  decision. `reserveSeats` now returns a `SeatReservationResult(successful,
+  availableSeats)` computed atomically inside the same synchronized block, so the
+  error message is always exact. Also split `FlightRepository.save` into a
+  seed-only `seedFlight` versus the API-driven `putIfAbsent`, so a future caller can't
+  accidentally reuse the unconditional-overwrite path and silently reset an
+  already-booked flight's seat count.
 
 ## What I'd improve with more time
 
@@ -151,3 +192,12 @@ looking for real issues rather than more feature generation.
   booking rates.
 - **API docs**: no OpenAPI/Swagger UI generated - would add `springdoc-openapi` given
   more time.
+- **Error message detail on framework exceptions**: `GlobalExceptionHandler` passes
+  `ex.getMessage()` straight through for Spring MVC's own exceptions (malformed JSON,
+  wrong field type, missing body). This gives genuinely useful detail for legitimate
+  client mistakes, but for a couple of these Spring's default message includes the
+  full internal method signature (e.g. "Required request body is missing: public
+  com.example...BookingResponse ...bookFlight(...)"), which leaks implementation
+  detail that a hardened public API shouldn't expose. Didn't sanitize this - a safe
+  fix needs per-exception-type message shaping rather than a blanket string trim,
+  which risked cutting real detail off other messages.

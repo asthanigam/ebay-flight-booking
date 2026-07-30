@@ -25,14 +25,21 @@ public class Flight {
      * Atomically reserves {@code seatCount} seats if enough are available.
      * Synchronized per-flight so concurrent bookings on the same flight
      * can never oversell it, while bookings on different flights don't
-     * contend with each other.
+     * contend with each other. Returns the available-seats count as of
+     * the same atomic decision, so a caller building a "not enough seats"
+     * message never has to re-read availableSeats separately - a second,
+     * unsynchronized read could reflect a different value by the time
+     * it runs under concurrent bookings.
      */
-    public synchronized boolean reserveSeats(int seatCount) {
+    public synchronized SeatReservationResult reserveSeats(int seatCount) {
         if (seatCount <= 0 || seatCount > availableSeats) {
-            return false;
+            return new SeatReservationResult(false, availableSeats);
         }
         availableSeats -= seatCount;
-        return true;
+        return new SeatReservationResult(true, availableSeats);
+    }
+
+    public record SeatReservationResult(boolean successful, int availableSeats) {
     }
 
     public String getFlightNumber() {

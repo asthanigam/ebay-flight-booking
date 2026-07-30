@@ -18,11 +18,11 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        flightRepository.save(new Flight("AA100", "JFK", "LAX",
+        flightRepository.seedFlight(new Flight("AA100", "JFK", "LAX",
                 LocalDateTime.now().plusDays(1), 3));
-        flightRepository.save(new Flight("BA200", "LHR", "JFK",
+        flightRepository.seedFlight(new Flight("BA200", "LHR", "JFK",
                 LocalDateTime.now().plusDays(2), 50));
-        flightRepository.save(new Flight("DL300", "ATL", "SEA",
+        flightRepository.seedFlight(new Flight("DL300", "ATL", "SEA",
                 LocalDateTime.now().plusDays(3), 120));
     }
 }

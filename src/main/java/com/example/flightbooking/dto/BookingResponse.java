@@ -13,11 +13,11 @@ public record BookingResponse(
 ) {
     public static BookingResponse from(Booking booking) {
         return new BookingResponse(
-                booking.getBookingId(),
-                booking.getFlightNumber(),
-                booking.getPassengerName(),
-                booking.getSeatCount(),
-                booking.getBookedAt()
+                booking.bookingId(),
+                booking.flightNumber(),
+                booking.passengerName(),
+                booking.seatCount(),
+                booking.bookedAt()
         );
     }
 }

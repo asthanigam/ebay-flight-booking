@@ -27,10 +27,10 @@ public class BookingService {
         // reserveSeats is synchronized on the Flight instance, so concurrent
         // bookings against the same flight are serialized and can never
         // oversell it, while bookings on different flights don't contend.
-        boolean reserved = flight.reserveSeats(request.seatCount());
-        if (!reserved) {
+        Flight.SeatReservationResult result = flight.reserveSeats(request.seatCount());
+        if (!result.successful()) {
             throw new FlightFullException(request.flightNumber(), request.seatCount(),
-                    flight.getAvailableSeats());
+                    result.availableSeats());
         }
 
         Booking booking = new Booking(

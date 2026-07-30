@@ -110,6 +110,22 @@ class BookingControllerTest {
     }
 
     @Test
+    void bookFlight_malformedJson_returns400NotServerError() throws Exception {
+        mockMvc.perform(post("/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"flightNumber\": \"AA100\", \"passengerName\": "))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void bookFlight_wrongFieldType_returns400NotServerError() throws Exception {
+        mockMvc.perform(post("/bookings")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"flightNumber\":\"AA100\",\"passengerName\":\"Jane\",\"seatCount\":\"two\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void concurrentBookings_neverOversellTheFlight() throws Exception {
         int totalSeats = 10;
         int requestCount = 30;
